@@ -42,10 +42,19 @@ class MainActivity : ComponentActivity() {
     private val viewModel: DogFitViewModel by viewModels {
         androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(application)
     }
+    private var isReceiverRegistered = false
 
     private val dataReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            intent?.getStringExtra("data")?.let { parsear(it) }
+            when (intent?.action) {
+                DogFitBleService.ACTION_NEW_DATA -> {
+                    intent.getStringExtra("data")?.let { parsear(it) }
+                }
+                DogFitBleService.ACTION_BLE_STATUS -> {
+                    val status = intent.getStringExtra(DogFitBleService.EXTRA_STATUS)
+                    viewModel.updateBleConnection(status == DogFitBleService.STATUS_CONNECTED)
+                }
+            }
         }
     }
 
@@ -76,6 +85,7 @@ class MainActivity : ComponentActivity() {
         }
 
         handleNotificationIntent(intent)
+        registerBleReceivers()
 
         if (checkPermissions()) {
             startService(Intent(this, DogFitBleService::class.java))
@@ -102,6 +112,7 @@ class MainActivity : ComponentActivity() {
             val battery = json.optInt("bat", 0)
             val activity = json.optInt("act", 0)
 
+            viewModel.updateBleConnection(true)
             viewModel.updateActivity(activity)
             viewModel.updateBattery(battery)
             viewModel.updateStepsFromBle(steps)
@@ -144,19 +155,27 @@ class MainActivity : ComponentActivity() {
         ActivityCompat.requestPermissions(this, permissions.toTypedArray(), 1)
     }
 
-    override fun onResume() {
-        super.onResume()
+    private fun registerBleReceivers() {
+        if (isReceiverRegistered) return
+        val filter = IntentFilter().apply {
+            addAction(DogFitBleService.ACTION_NEW_DATA)
+            addAction(DogFitBleService.ACTION_BLE_STATUS)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(dataReceiver, IntentFilter("com.astralimit.dogfit.NEW_DATA"), RECEIVER_NOT_EXPORTED)
+            registerReceiver(dataReceiver, filter, RECEIVER_NOT_EXPORTED)
         } else {
             @Suppress("UnspecifiedRegisterReceiverFlag")
-            registerReceiver(dataReceiver, IntentFilter("com.astralimit.dogfit.NEW_DATA"))
+            registerReceiver(dataReceiver, filter)
         }
+        isReceiverRegistered = true
     }
 
-    override fun onPause() {
-        super.onPause()
-        unregisterReceiver(dataReceiver)
+    override fun onDestroy() {
+        super.onDestroy()
+        if (isReceiverRegistered) {
+            unregisterReceiver(dataReceiver)
+            isReceiverRegistered = false
+        }
     }
 }
 
@@ -179,28 +198,49 @@ fun MainScreen(
     val restMinutes = dailyStats?.restMinutes ?: 0
     val restFallbackMs = TimeUnit.MINUTES.toMillis(restMinutes.toLong())
 
-    val activityLabel = when (activityValue) {
-        0 -> "Reposo"
-        1 -> "Caminando"
-        2 -> "Corriendo"
-        3 -> "Jugando"
-        else -> "Desconectado"
+    val isBleConnected by viewModel.isBleConnected.collectAsState()
+    val activityLabel = when {
+        !isBleConnected -> "Desconectado"
+        activityValue == null -> "Conectado"
+        else -> when (activityValue) {
+            0 -> "Reposo"
+            1 -> "Caminando"
+            2 -> "Corriendo"
+            3 -> "Jugando"
+            else -> "Desconectado"
+        }
     }
-    val activityColor = when (activityValue) {
-        0 -> MaterialTheme.colorScheme.tertiary
-        1 -> MaterialTheme.colorScheme.primary
-        2 -> MaterialTheme.colorScheme.secondary
-        3 -> MaterialTheme.colorScheme.error
-        else -> MaterialTheme.colorScheme.outline
+    val activityColor = when {
+        !isBleConnected -> MaterialTheme.colorScheme.outline
+        activityValue == null -> MaterialTheme.colorScheme.primary
+        else -> when (activityValue) {
+            0 -> MaterialTheme.colorScheme.tertiary
+            1 -> MaterialTheme.colorScheme.primary
+            2 -> MaterialTheme.colorScheme.secondary
+            3 -> MaterialTheme.colorScheme.error
+            else -> MaterialTheme.colorScheme.outline
+        }
     }
-    val progress = when (activityValue) {
-        0 -> 0.25f
-        1 -> 0.5f
-        2 -> 0.75f
-        3 -> 1f
-        else -> 0f
+    val progress = when {
+        !isBleConnected -> 0f
+        activityValue == null -> 0.1f
+        else -> when (activityValue) {
+            0 -> 0.25f
+            1 -> 0.5f
+            2 -> 0.75f
+            3 -> 1f
+            else -> 0f
+        }
     }
     val animatedColor by animateColorAsState(activityColor, label = "activityColor")
+
+    val activityTextStyle = when (activityLabel.length) {
+        in 0..9 -> MaterialTheme.typography.displayMedium
+        in 10..11 -> MaterialTheme.typography.headlineMedium
+        else -> MaterialTheme.typography.titleMedium
+    }
+    val activitySubLabel = if (activityValue == null && isBleConnected) "Conectado" else "ESTADO"
+    val activityLabelText = if (activityValue == null && isBleConnected) "Esperando" else activityLabel
     val activityTimes = dailyStats?.activityTimes ?: emptyMap()
 
     Scaffold(
@@ -278,13 +318,14 @@ fun MainScreen(
 
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = activityLabel,
-                                style = MaterialTheme.typography.displayMedium,
+                                text = activityLabelText,
+                                style = activityTextStyle,
                                 fontWeight = FontWeight.Black,
-                                color = animatedColor
+                                color = animatedColor,
+                                maxLines = 1
                             )
                             Text(
-                                text = "ESTADO",
+                                text = activitySubLabel,
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -336,106 +377,14 @@ fun MainScreen(
                         2 to "Corriendo",
                         3 to "Jugando"
                     ).forEach { (type, label) ->
-                        val time = activityTimes[type] ?: 0L
-                        val minutes = TimeUnit.MILLISECONDS.toMinutes(time)
-                        val hours = minutes / 60
-                        val remainingMinutes = minutes % 60
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                text = "${hours}h ${remainingMinutes}m",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-            }
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "Resumen diario (24h)",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    listOf(
-                        0 to "Reposo",
-                        1 to "Caminando",
-                        2 to "Corriendo",
-                        3 to "Jugando"
-                    ).forEach { (type, label) ->
-                        val time = activityTimes[type] ?: 0L
-                        val hours = TimeUnit.MILLISECONDS.toHours(time)
-                        val remainingMinutes = TimeUnit.MILLISECONDS.toMinutes(time) % 60
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                text = "${hours}h ${remainingMinutes}m",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-            }
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "Resumen diario (24h)",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    listOf(
-                        0 to "Reposo",
-                        1 to "Caminando",
-                        2 to "Corriendo",
-                        3 to "Jugando"
-                    ).forEach { (type, label) ->
                         val time = if (type == 0) {
                             activityTimes[type] ?: restFallbackMs
                         } else {
                             activityTimes[type] ?: 0L
                         }
-                        val hours = TimeUnit.MILLISECONDS.toHours(time)
-                        val remainingMinutes = TimeUnit.MILLISECONDS.toMinutes(time) % 60
+                        val minutes = TimeUnit.MILLISECONDS.toMinutes(time)
+                        val hours = minutes / 60
+                        val remainingMinutes = minutes % 60
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -463,13 +412,7 @@ fun MainScreen(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Default.Speed,
                     label = "Estado",
-                    value = when (activityValue) {
-                        0 -> "Reposo"
-                        1 -> "Caminando"
-                        2 -> "Corriendo"
-                        3 -> "Jugando"
-                        else -> "Desconectado"
-                    },
+                    value = activityLabel,
                     color = MaterialTheme.colorScheme.secondaryContainer
                 )
                 StatusCard(
