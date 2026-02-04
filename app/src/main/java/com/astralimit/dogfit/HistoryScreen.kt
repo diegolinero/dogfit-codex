@@ -515,7 +515,7 @@ fun DateHeader(dateStr: String) {
 }
 
 @Composable
-fun DailySummaryItem(summary: DailySummary) {
+fun DailySummaryItem(summary: DogActivityData) {
     var expanded by remember { mutableStateOf(false) }
     val labels = listOf("Reposo", "Caminando", "Corriendo", "Jugando")
     val colors = listOf(Color.Gray, Color(0xFF4CAF50), Color(0xFFFFC107), Color(0xFFFF5722))
@@ -542,7 +542,7 @@ fun DailySummaryItem(summary: DailySummary) {
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Resumen de Actividad",
+                        text = "Actividad ${labels.getOrElse(summary.activityType) { "Desconocido" }}",
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium
                     )
@@ -555,7 +555,7 @@ fun DailySummaryItem(summary: DailySummary) {
 
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = "${summary.activeMinutes} min",
+                        text = "${summary.durationMinutes} min",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -567,31 +567,60 @@ fun DailySummaryItem(summary: DailySummary) {
                 }
             }
 
-            if (expanded && summary.activityTimes.isNotEmpty()) {
+            if (expanded) {
                 Spacer(modifier = Modifier.height(12.dp))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                summary.activityTimes.entries.sortedBy { it.key }.forEach { (act, time) ->
-                    if (time > 0) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 2.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(colors.getOrElse(act) { Color.Gray }))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(labels.getOrElse(act) { "Desconocido" }, style = MaterialTheme.typography.bodySmall)
-                            }
-                            val minutes = time / 60
-                            val seconds = time % 60
-                            Text(
-                                text = if (minutes > 0) "${minutes}m ${seconds}s" else "${seconds}s",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                val color = colors.getOrElse(summary.activityType) { Color.Gray }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Pasos", style = MaterialTheme.typography.bodySmall)
                     }
+                    Text(
+                        text = summary.steps.toString(),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Calorías", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text(
+                        text = String.format("%.1f", summary.calories),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Distancia", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text(
+                        text = String.format("%.2f km", summary.estimatedDistance / 1000),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }

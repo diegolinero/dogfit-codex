@@ -24,6 +24,9 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
     private val _batteryValue = MutableStateFlow<Int?>(null)
     val batteryValue: StateFlow<Int?> = _batteryValue.asStateFlow()
 
+    private val _activityTimes = MutableStateFlow<Map<Int, Long>>(emptyMap())
+    val activityTimes: StateFlow<Map<Int, Long>> = _activityTimes.asStateFlow()
+
     // LiveData para compatibilidad
     private val _activityLiveData = MutableLiveData<Int?>()
     val activityLiveData: LiveData<Int?> = _activityLiveData
@@ -265,6 +268,7 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
                     DogActivityData(
                         id = calendar.timeInMillis + hour * 1000L,
                         timestamp = calendar.timeInMillis,
+                        date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(calendar.time),
                         activityType = activityType,
                         intensity = when(activityType) {
                             2 -> 0.9f
@@ -272,6 +276,7 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
                             3 -> 0.7f
                             else -> 0.1f
                         },
+                        durationMinutes = 5,
                         steps = steps,
                         estimatedDistance = distance * 1000,
                         calories = calories,
@@ -302,6 +307,7 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
         val restMinutes = todayData.count { it.activityType == 0 } * 5
         val distance = todayData.sumOf { it.estimatedDistance.toDouble() }.toFloat() / 1000
         val calories = todayData.sumOf { it.calories.toDouble() }.toFloat()
+        val activityTimes = buildActivityTimes(todayData)
 
         val activityDistribution = mutableMapOf<String, Int>()
         todayData.forEach { data ->
@@ -336,6 +342,7 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
         _dailyStats.value = DailySummary(
             date = today,
             totalSteps = totalSteps,
+            totalActiveMinutes = activeMinutes,
             activeMinutes = activeMinutes,
             restMinutes = restMinutes,
             distanceKm = distance,
@@ -344,8 +351,10 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
             longestWalk = if (todayData.isNotEmpty()) 30 else 0,
             activityDistribution = activityDistribution,
             goalAchieved = goalPercentage >= 100,
-            wellnessScore = wellnessScore
+            wellnessScore = wellnessScore,
+            activityTimes = activityTimes
         )
+        _activityTimes.value = activityTimes
     }
 
     private fun updateWeeklyStats() {
@@ -382,6 +391,7 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
                 DailySummary(
                     date = SimpleDateFormat("EEE", Locale.getDefault()).format(calendar.time),
                     totalSteps = totalSteps,
+                    totalActiveMinutes = activeMinutes,
                     activeMinutes = activeMinutes,
                     restMinutes = (24*60) - activeMinutes,
                     distanceKm = distance,
@@ -396,8 +406,8 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         val totalSteps = weekData.sumOf { it.totalSteps }
-        val avgDailySteps = if (weekData.isNotEmpty()) totalSteps / weekData.size else 0
-        val totalDistance = weekData.sumOf { it.distanceKm.toDouble() }.toFloat()
+        val totalActiveMinutes = weekData.sumOf { it.activeMinutes }
+        val avgDailyMinutes = if (weekData.isNotEmpty()) totalActiveMinutes / weekData.size else 0
         val totalCalories = weekData.sumOf { it.caloriesBurned.toDouble() }.toFloat()
         val activeDays = weekData.count {
             val target = _dogProfile.value?.targetDailySteps ?: 5000
@@ -414,9 +424,8 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
         _weeklyStats.value = WeeklySummary(
             weekNumber = calendar.get(Calendar.WEEK_OF_YEAR),
             weekRange = "${weekData.first().date} - ${weekData.last().date}",
-            totalSteps = totalSteps,
-            avgDailySteps = avgDailySteps,
-            totalDistance = totalDistance,
+            totalActiveMinutes = totalActiveMinutes,
+            avgDailyMinutes = avgDailyMinutes,
             totalCalories = totalCalories,
             activeDays = activeDays,
             restDays = weekData.size - activeDays,
@@ -446,8 +455,8 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         val totalSteps = dailyTotals.sum()
-        val avgDailySteps = if (dailyTotals.isNotEmpty()) totalSteps / dailyTotals.size else 0
-        val totalDistance = monthData.sumOf { it.estimatedDistance.toDouble() }.toFloat() / 1000
+        val totalActiveMinutes = monthData.sumOf { it.durationMinutes }
+        val avgDailyMinutes = if (dailyTotals.isNotEmpty()) totalActiveMinutes / dailyTotals.size else 0
         val activeDays = dailyTotals.count {
             val target = _dogProfile.value?.targetDailySteps ?: 5000
             it > target * 0.5
@@ -477,9 +486,8 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
         _monthlyStats.value = MonthlySummary(
             month = SimpleDateFormat("MMMM", Locale.getDefault()).format(Date()),
             year = year,
-            totalSteps = totalSteps,
-            avgDailySteps = avgDailySteps,
-            totalDistance = totalDistance,
+            totalActiveMinutes = totalActiveMinutes,
+            avgDailyMinutes = avgDailyMinutes,
             activeDays = activeDays,
             longestActiveStreak = longestStreak,
             consistencyScore = consistencyScore,
@@ -528,6 +536,7 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
                 DailySummary(
                     date = SimpleDateFormat("EEE", Locale.getDefault()).format(calendar.time),
                     totalSteps = totalSteps,
+                    totalActiveMinutes = activeMinutes,
                     activeMinutes = activeMinutes,
                     restMinutes = (24*60) - activeMinutes,
                     distanceKm = dayData.sumOf { it.estimatedDistance.toDouble() }.toFloat() / 1000,
@@ -709,9 +718,13 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
             val deltaSteps = (normalizedSteps - previousSteps).coerceAtLeast(0)
             if (deltaSteps > 0) {
                 val activityType = _activityValue.value ?: 0
+                val timestamp = System.currentTimeMillis()
+                val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(timestamp))
+                val durationMinutes = 5
                 val newData = DogActivityData(
-                    id = System.currentTimeMillis(),
-                    timestamp = System.currentTimeMillis(),
+                    id = timestamp,
+                    timestamp = timestamp,
+                    date = date,
                     activityType = activityType,
                     intensity = when (activityType) {
                         0 -> 0.1f
@@ -720,6 +733,7 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
                         3 -> 0.7f
                         else -> 0.3f
                     },
+                    durationMinutes = durationMinutes,
                     steps = deltaSteps,
                     estimatedDistance = calculateDistance(deltaSteps, _dogProfile.value?.breed ?: "Mixed") * 1000,
                     calories = deltaSteps * 0.05f
@@ -736,6 +750,21 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
 
             updateAllStats()
         }
+    }
+
+    fun reloadActivityTimesFromDatabase() {
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val todayData = _activityHistory.value?.filter { it.date == today } ?: emptyList()
+        _activityTimes.value = buildActivityTimes(todayData)
+    }
+
+    private fun buildActivityTimes(data: List<DogActivityData>): Map<Int, Long> {
+        val times = mutableMapOf<Int, Long>()
+        data.forEach { activity ->
+            val seconds = activity.durationMinutes.toLong() * 60
+            times[activity.activityType] = (times[activity.activityType] ?: 0L) + seconds
+        }
+        return times
     }
 
     fun addVaccination(vaccination: Vaccination) {
