@@ -41,6 +41,8 @@ fun StatisticsScreen(viewModel: DogFitViewModel, onBack: () -> Unit) {
     val dailyStats by viewModel.dailyStats.observeAsState(DailySummary())
     val profile by viewModel.dogProfile.observeAsState()
     val activityTimes by viewModel.activityTimes.collectAsState()
+    val weeklyStats by viewModel.weeklyStats.observeAsState()
+    val monthlyStats by viewModel.monthlyStats.observeAsState()
     var selectedPeriod by remember { mutableStateOf("Día") }
     val periods = listOf("Día", "Semana", "Mes")
 
@@ -144,7 +146,6 @@ fun StatisticsScreen(viewModel: DogFitViewModel, onBack: () -> Unit) {
 
             when (selectedPeriod) {
                 "Semana" -> {
-                    val weeklyStats = viewModel.getWeeklyStats()
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp)
@@ -152,14 +153,13 @@ fun StatisticsScreen(viewModel: DogFitViewModel, onBack: () -> Unit) {
                         Column(modifier = Modifier.padding(20.dp)) {
                             Text("Estadísticas Semanales", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(16.dp))
-                            Text("Total minutos activos: ${weeklyStats.totalActiveMinutes}")
-                            Text("Promedio diario: ${weeklyStats.avgDailyMinutes} min")
-                            Text("Días activos: ${weeklyStats.activeDays}")
+                            Text("Total minutos activos: ${weeklyStats?.totalActiveMinutes ?: 0}")
+                            Text("Promedio diario: ${weeklyStats?.avgDailyMinutes ?: 0} min")
+                            Text("Días activos: ${weeklyStats?.activeDays ?: 0}")
                         }
                     }
                 }
                 "Mes" -> {
-                    val monthlyStats = viewModel.getMonthlyStats()
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp)
@@ -167,9 +167,9 @@ fun StatisticsScreen(viewModel: DogFitViewModel, onBack: () -> Unit) {
                         Column(modifier = Modifier.padding(20.dp)) {
                             Text("Estadísticas Mensuales", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(16.dp))
-                            Text("Mes: ${monthlyStats.month}")
-                            Text("Total minutos activos: ${monthlyStats.totalActiveMinutes}")
-                            Text("Promedio diario: ${monthlyStats.avgDailyMinutes} min")
+                            Text("Mes: ${monthlyStats?.month ?: ""}")
+                            Text("Total minutos activos: ${monthlyStats?.totalActiveMinutes ?: 0}")
+                            Text("Promedio diario: ${monthlyStats?.avgDailyMinutes ?: 0} min")
                         }
                     }
                 }
