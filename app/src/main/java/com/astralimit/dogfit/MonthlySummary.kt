@@ -3,6 +3,9 @@ package com.astralimit.dogfit
 data class MonthlySummary(
     val month: String = "",
     val year: Int = 2026,
+    val totalSteps: Int = 0,
+    val avgDailySteps: Int = 0,
+    val totalDistance: Float = 0f,
     val totalActiveMinutes: Int = 0,
     val avgDailyMinutes: Int = 0,
     val activeDays: Int = 0,

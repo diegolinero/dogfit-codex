@@ -20,6 +20,7 @@ data class DogProfile(
     val medicalRecord: PetMedicalRecord = PetMedicalRecord(),
     val vetVisits: List<VetVisit> = emptyList(),
     val targetActiveMinutes: Int = 60,
+    val targetDailySteps: Int = 5000,
     val activitySensitivity: Float = 1.0f,
     val isCalibrated: Boolean = false,
     val calibrationRestValue: Float = 0.10f,

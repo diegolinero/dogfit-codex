@@ -65,6 +65,11 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
     private val _monthlyStats = MutableLiveData<MonthlySummary>()
     val monthlyStats: LiveData<MonthlySummary> = _monthlyStats
 
+    val activityClassifier = ActivityClassifier()
+
+    private val _activityTimes = MutableStateFlow<Map<Int, Long>>(emptyMap())
+    val activityTimes: StateFlow<Map<Int, Long>> = _activityTimes.asStateFlow()
+
     private val breedRecommendations = mapOf(
         "Labrador" to BreedRecommendation(
             breed = "Labrador Retriever",
@@ -303,6 +308,12 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
         val distance = todayData.sumOf { it.estimatedDistance.toDouble() }.toFloat() / 1000
         val calories = todayData.sumOf { it.calories.toDouble() }.toFloat()
 
+        val activityTimes = (0..3).associateWith { activityType ->
+            val minutes = todayData.count { it.activityType == activityType } * 5
+            minutes * 60L * 1000L
+        }
+        _activityTimes.value = activityTimes
+
         val activityDistribution = mutableMapOf<String, Int>()
         todayData.forEach { data ->
             val activityName = when (data.activityType) {
@@ -336,6 +347,7 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
         _dailyStats.value = DailySummary(
             date = today,
             totalSteps = totalSteps,
+            totalActiveMinutes = activeMinutes,
             activeMinutes = activeMinutes,
             restMinutes = restMinutes,
             distanceKm = distance,
@@ -344,7 +356,8 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
             longestWalk = if (todayData.isNotEmpty()) 30 else 0,
             activityDistribution = activityDistribution,
             goalAchieved = goalPercentage >= 100,
-            wellnessScore = wellnessScore
+            wellnessScore = wellnessScore,
+            activityTimes = activityTimes
         )
     }
 
@@ -382,6 +395,7 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
                 DailySummary(
                     date = SimpleDateFormat("EEE", Locale.getDefault()).format(calendar.time),
                     totalSteps = totalSteps,
+                    totalActiveMinutes = activeMinutes,
                     activeMinutes = activeMinutes,
                     restMinutes = (24*60) - activeMinutes,
                     distanceKm = distance,
@@ -399,6 +413,8 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
         val avgDailySteps = if (weekData.isNotEmpty()) totalSteps / weekData.size else 0
         val totalDistance = weekData.sumOf { it.distanceKm.toDouble() }.toFloat()
         val totalCalories = weekData.sumOf { it.caloriesBurned.toDouble() }.toFloat()
+        val totalActiveMinutes = weekData.sumOf { it.activeMinutes }
+        val avgDailyMinutes = if (weekData.isNotEmpty()) totalActiveMinutes / weekData.size else 0
         val activeDays = weekData.count {
             val target = _dogProfile.value?.targetDailySteps ?: 5000
             it.totalSteps > target * 0.5
@@ -417,6 +433,8 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
             totalSteps = totalSteps,
             avgDailySteps = avgDailySteps,
             totalDistance = totalDistance,
+            totalActiveMinutes = totalActiveMinutes,
+            avgDailyMinutes = avgDailyMinutes,
             totalCalories = totalCalories,
             activeDays = activeDays,
             restDays = weekData.size - activeDays,
@@ -448,6 +466,8 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
         val totalSteps = dailyTotals.sum()
         val avgDailySteps = if (dailyTotals.isNotEmpty()) totalSteps / dailyTotals.size else 0
         val totalDistance = monthData.sumOf { it.estimatedDistance.toDouble() }.toFloat() / 1000
+        val totalActiveMinutes = monthData.count { it.activityType in 1..3 } * 5
+        val avgDailyMinutes = if (dailyTotals.isNotEmpty()) totalActiveMinutes / dailyTotals.size else 0
         val activeDays = dailyTotals.count {
             val target = _dogProfile.value?.targetDailySteps ?: 5000
             it > target * 0.5
@@ -480,6 +500,8 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
             totalSteps = totalSteps,
             avgDailySteps = avgDailySteps,
             totalDistance = totalDistance,
+            totalActiveMinutes = totalActiveMinutes,
+            avgDailyMinutes = avgDailyMinutes,
             activeDays = activeDays,
             longestActiveStreak = longestStreak,
             consistencyScore = consistencyScore,
@@ -496,52 +518,8 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
         return breedRecommendations.keys.toList()
     }
 
-    fun getWeeklyStats(): List<DailySummary> {
-        val calendar = Calendar.getInstance()
-        val weeklyStats = mutableListOf<DailySummary>()
-
-        for (i in 6 downTo 0) {
-            calendar.time = Date()
-            calendar.add(Calendar.DAY_OF_YEAR, -i)
-            val dateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(calendar.time)
-
-            val dayData = _activityHistory.value?.filter {
-                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(it.timestamp)) == dateStr
-            } ?: emptyList()
-
-            val totalSteps = dayData.sumOf { it.steps }
-            val activeMinutes = dayData.count { it.activityType in 1..3 } * 5
-
-            val activityDistribution = mutableMapOf<String, Int>()
-            dayData.forEach { data ->
-                val activityName = when (data.activityType) {
-                    0 -> "Reposo"
-                    1 -> "Caminata"
-                    2 -> "Carrera"
-                    3 -> "Juego"
-                    else -> "Desconocido"
-                }
-                activityDistribution[activityName] = (activityDistribution[activityName] ?: 0) + 5
-            }
-
-            weeklyStats.add(
-                DailySummary(
-                    date = SimpleDateFormat("EEE", Locale.getDefault()).format(calendar.time),
-                    totalSteps = totalSteps,
-                    activeMinutes = activeMinutes,
-                    restMinutes = (24*60) - activeMinutes,
-                    distanceKm = dayData.sumOf { it.estimatedDistance.toDouble() }.toFloat() / 1000,
-                    caloriesBurned = dayData.sumOf { it.calories.toDouble() }.toFloat(),
-                    peakActivityHour = "12:00",
-                    longestWalk = 30,
-                    activityDistribution = activityDistribution,
-                    goalAchieved = totalSteps >= (_dogProfile.value?.targetDailySteps ?: 5000),
-                    wellnessScore = 75
-                )
-            )
-        }
-
-        return weeklyStats
+    fun getWeeklyStats(): WeeklySummary {
+        return _weeklyStats.value ?: WeeklySummary()
     }
 
     private fun calculateDistance(steps: Int, breed: String): Float {
@@ -736,6 +714,91 @@ class DogFitViewModel(application: Application) : AndroidViewModel(application) 
 
             updateAllStats()
         }
+    }
+
+    fun saveFullCalibration(
+        rest: CalibrationFeatures,
+        walk: CalibrationFeatures,
+        run: CalibrationFeatures
+    ) {
+        activityClassifier.applyFullCalibration(rest, walk, run)
+        val currentProfile = _dogProfile.value ?: return
+        _dogProfile.value = currentProfile.copy(
+            isCalibrated = true,
+            calibrationRestFeatures = rest,
+            calibrationWalkFeatures = walk,
+            calibrationRunFeatures = run
+        )
+    }
+
+    fun reloadActivityTimesFromDatabase() {
+        updateDailyStats()
+    }
+
+    fun getMonthlyStats(): MonthlySummary {
+        return _monthlyStats.value ?: MonthlySummary()
+    }
+
+    fun addVetVisit(visit: VetVisit) {
+        val currentProfile = _dogProfile.value ?: return
+        val updatedVisits = currentProfile.vetVisits + visit
+        _dogProfile.value = currentProfile.copy(vetVisits = updatedVisits)
+    }
+
+    fun updateVetVisit(visit: VetVisit) {
+        val currentProfile = _dogProfile.value ?: return
+        val updatedVisits = currentProfile.vetVisits.map { existing ->
+            if (existing.id == visit.id) visit else existing
+        }
+        _dogProfile.value = currentProfile.copy(vetVisits = updatedVisits)
+    }
+
+    fun deleteVetVisit(visit: VetVisit) {
+        val currentProfile = _dogProfile.value ?: return
+        val updatedVisits = currentProfile.vetVisits.filterNot { it.id == visit.id }
+        _dogProfile.value = currentProfile.copy(vetVisits = updatedVisits)
+    }
+
+    fun calculateAge(birthDate: Date?): Int {
+        if (birthDate == null) return 0
+        val calendar = Calendar.getInstance()
+        val birthCalendar = Calendar.getInstance().apply { time = birthDate }
+        var age = calendar.get(Calendar.YEAR) - birthCalendar.get(Calendar.YEAR)
+        if (calendar.get(Calendar.DAY_OF_YEAR) < birthCalendar.get(Calendar.DAY_OF_YEAR)) {
+            age--
+        }
+        return age.coerceAtLeast(0)
+    }
+
+    fun addWeightRecord(record: WeightRecord) {
+        val currentProfile = _dogProfile.value ?: return
+        val updatedHistory = currentProfile.weightHistory + record
+        _dogProfile.value = currentProfile.copy(
+            weight = record.weight,
+            weightHistory = updatedHistory
+        )
+    }
+
+    fun updateVaccination(vaccination: Vaccination) {
+        val currentProfile = _dogProfile.value ?: return
+        val record = currentProfile.medicalRecord
+        val updatedVaccinations = record.vaccinations.map { existing ->
+            if (existing.id == vaccination.id) vaccination else existing
+        }
+        val updatedRecord = record.copy(vaccinations = updatedVaccinations)
+        _dogProfile.value = currentProfile.copy(medicalRecord = updatedRecord)
+        checkMedicalReminders()
+    }
+
+    fun updateDeworming(deworming: Deworming) {
+        val currentProfile = _dogProfile.value ?: return
+        val record = currentProfile.medicalRecord
+        val updatedDewormings = record.dewormings.map { existing ->
+            if (existing.id == deworming.id) deworming else existing
+        }
+        val updatedRecord = record.copy(dewormings = updatedDewormings)
+        _dogProfile.value = currentProfile.copy(medicalRecord = updatedRecord)
+        checkMedicalReminders()
     }
 
     fun addVaccination(vaccination: Vaccination) {
