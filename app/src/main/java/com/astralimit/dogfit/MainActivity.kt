@@ -176,6 +176,8 @@ fun MainScreen(
     val batteryValue by viewModel.batteryValue.collectAsState()
     val activityValue by viewModel.activityValue.collectAsState()
     val alerts by viewModel.alerts.observeAsState()
+    val restMinutes = dailyStats?.restMinutes ?: 0
+    val restFallbackMs = TimeUnit.MINUTES.toMillis(restMinutes.toLong())
 
     val activityLabel = when (activityValue) {
         0 -> "Reposo"
