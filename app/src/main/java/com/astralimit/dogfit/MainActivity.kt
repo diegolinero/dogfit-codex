@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
     private val viewModel: DogFitViewModel by viewModels {
         androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(application)
     }
+    private var isReceiverRegistered = false
 
     private val dataReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -84,6 +85,7 @@ class MainActivity : ComponentActivity() {
         }
 
         handleNotificationIntent(intent)
+        registerBleReceivers()
 
         if (checkPermissions()) {
             startService(Intent(this, DogFitBleService::class.java))
@@ -110,6 +112,7 @@ class MainActivity : ComponentActivity() {
             val battery = json.optInt("bat", 0)
             val activity = json.optInt("act", 0)
 
+            viewModel.updateBleConnection(true)
             viewModel.updateActivity(activity)
             viewModel.updateBattery(battery)
             viewModel.updateStepsFromBle(steps)
@@ -152,6 +155,8 @@ class MainActivity : ComponentActivity() {
         ActivityCompat.requestPermissions(this, permissions.toTypedArray(), 1)
     }
 
+    private fun registerBleReceivers() {
+        if (isReceiverRegistered) return
     override fun onResume() {
         super.onResume()
         val filter = IntentFilter().apply {
@@ -164,11 +169,15 @@ class MainActivity : ComponentActivity() {
             @Suppress("UnspecifiedRegisterReceiverFlag")
             registerReceiver(dataReceiver, filter)
         }
+        isReceiverRegistered = true
     }
 
-    override fun onPause() {
-        super.onPause()
-        unregisterReceiver(dataReceiver)
+    override fun onDestroy() {
+        super.onDestroy()
+        if (isReceiverRegistered) {
+            unregisterReceiver(dataReceiver)
+            isReceiverRegistered = false
+        }
     }
 }
 
@@ -229,6 +238,8 @@ fun MainScreen(
 
     val activityTextStyle = when (activityLabel.length) {
         in 0..9 -> MaterialTheme.typography.displayMedium
+        in 10..11 -> MaterialTheme.typography.headlineMedium
+        else -> MaterialTheme.typography.titleMedium
         in 10..12 -> MaterialTheme.typography.headlineMedium
         else -> MaterialTheme.typography.titleLarge
     }
