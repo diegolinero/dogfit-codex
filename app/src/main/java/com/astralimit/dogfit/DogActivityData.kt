@@ -11,6 +11,8 @@ data class DogActivityData(
     val timestamp: Long = System.currentTimeMillis(),
     val activityType: Int = 0, // 0=reposo, 1=caminata, 2=carrera, 3=juego
     val intensity: Float = 0f, // 0.0 a 1.0
+    val steps: Int = 0,
+    val estimatedDistance: Float = 0f, // metros estimados
     val durationMinutes: Int = 0,
     val calories: Float = 0f,
     val heartRate: Int? = null,
