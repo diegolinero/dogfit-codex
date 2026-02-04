@@ -403,6 +403,56 @@ fun MainScreen(
                 }
             }
 
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Resumen diario (24h)",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    listOf(
+                        0 to "Reposo",
+                        1 to "Caminando",
+                        2 to "Corriendo",
+                        3 to "Jugando"
+                    ).forEach { (type, label) ->
+                        val time = if (type == 0) {
+                            activityTimes[type] ?: restFallbackMs
+                        } else {
+                            activityTimes[type] ?: 0L
+                        }
+                        val hours = TimeUnit.MILLISECONDS.toHours(time)
+                        val remainingMinutes = TimeUnit.MILLISECONDS.toMinutes(time) % 60
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = "${hours}h ${remainingMinutes}m",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
