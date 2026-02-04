@@ -14,10 +14,16 @@ class DogFitBleService : Service() {
     private val TAG = "DogFitBleService"
     private var bluetoothAdapter: BluetoothAdapter? = null
     private var bluetoothGatt: BluetoothGatt? = null
+    private var isScanning = false
+    private var isConnecting = false
+    private var fallbackScanEnabled = false
+    private val scanHandler = Handler(Looper.getMainLooper())
 
     private val SERVICE_UUID = UUID.fromString("4fafc201-1fb5-459e-8fcc-c5c9c331914b")
     private val ACTIVITY_CHAR_UUID = UUID.fromString("beb5483e-36e1-4688-b7f5-ea07361b26a8")
     private val BATTERY_CHAR_UUID = UUID.fromString("beb5483e-36e1-4688-b7f5-ea07361b26aa")
+    private val DEVICE_NAME_PREFIX = "DogFit"
+    private val SCAN_FALLBACK_DELAY_MS = 10000L
 
     override fun onCreate() {
         super.onCreate()
@@ -41,13 +47,37 @@ class DogFitBleService : Service() {
         val scanner = bluetoothAdapter?.bluetoothLeScanner ?: return
         val filter = ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE_UUID)).build()
         val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
-        Log.d(TAG, "Iniciando escaneo...")
+        Log.d(TAG, "Iniciando escaneo BLE con filtro de servicio...")
+        isScanning = true
+        fallbackScanEnabled = false
         scanner.startScan(listOf(filter), settings, scanCallback)
+        scanHandler.removeCallbacksAndMessages(null)
+        scanHandler.postDelayed({ startFallbackScan() }, SCAN_FALLBACK_DELAY_MS)
+    }
+
+    private fun startFallbackScan() {
+        val scanner = bluetoothAdapter?.bluetoothLeScanner ?: return
+        if (!isScanning || isConnecting) {
+            return
+        }
+        Log.w(TAG, "Sin resultados con filtro. Activando escaneo general...")
+        scanner.stopScan(scanCallback)
+        val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
+        fallbackScanEnabled = true
+        scanner.startScan(emptyList(), settings, scanCallback)
     }
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
-            Log.d(TAG, "Dispositivo encontrado!")
+            if (isConnecting) return
+            val deviceName = result.device.name ?: result.scanRecord?.deviceName
+            if (fallbackScanEnabled && deviceName?.contains(DEVICE_NAME_PREFIX, ignoreCase = true) != true) {
+                return
+            }
+            Log.d(TAG, "Dispositivo encontrado: ${deviceName ?: "Desconocido"}")
+            isConnecting = true
+            isScanning = false
+            scanHandler.removeCallbacksAndMessages(null)
             bluetoothAdapter?.bluetoothLeScanner?.stopScan(this)
             bluetoothGatt = result.device.connectGatt(this@DogFitBleService, false, gattCallback)
         }
@@ -57,9 +87,11 @@ class DogFitBleService : Service() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 Log.i(TAG, "GATT Conectado. Descubriendo servicios...")
+                isConnecting = false
                 gatt.discoverServices()
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 Log.e(TAG, "GATT Desconectado. Reintentando...")
+                isConnecting = false
                 gatt.close()
                 Handler(Looper.getMainLooper()).postDelayed({ startScanning() }, 5000)
             }
