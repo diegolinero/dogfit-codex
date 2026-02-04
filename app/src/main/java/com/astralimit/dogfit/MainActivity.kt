@@ -85,6 +85,7 @@ class MainActivity : ComponentActivity() {
         }
 
         handleNotificationIntent(intent)
+        registerBleReceivers()
 
         if (checkPermissions()) {
             startService(Intent(this, DogFitBleService::class.java))
