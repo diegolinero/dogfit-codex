@@ -176,9 +176,10 @@ fun MainScreen(
     val activityValue by viewModel.activityValue.collectAsState()
     val alerts by viewModel.alerts.observeAsState()
 
-    val targetSteps = profile?.targetDailySteps ?: 5000
-    val currentSteps = dailyStats?.totalSteps ?: 0
-    val progress = (currentSteps.toFloat() / targetSteps).coerceIn(0f, 1f)
+    val wellnessScore = dailyStats?.wellnessScore ?: 0
+    val activityMinutes = dailyStats?.totalActiveMinutes ?: 0
+    val restMinutes = dailyStats?.restMinutes ?: 0
+    val progress = (wellnessScore / 100f).coerceIn(0f, 1f)
 
     Scaffold(
         topBar = {
@@ -255,13 +256,13 @@ fun MainScreen(
 
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "$currentSteps",
+                                text = "$wellnessScore",
                                 style = MaterialTheme.typography.displayMedium,
                                 fontWeight = FontWeight.Black,
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "PASOS",
+                                text = "BIENESTAR",
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -271,14 +272,19 @@ fun MainScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = "${(progress * 100).toInt()}% del objetivo",
+                        text = "${(progress * 100).toInt()}% del bienestar diario",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
 
                     Text(
-                        text = "Meta: $targetSteps pasos",
+                        text = "Actividad hoy: $activityMinutes min activos",
                         style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "Descanso: $restMinutes min",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
