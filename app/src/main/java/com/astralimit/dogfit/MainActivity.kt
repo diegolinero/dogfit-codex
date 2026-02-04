@@ -200,6 +200,8 @@ fun MainScreen(
     }
     val animatedColor by animateColorAsState(activityColor, label = "activityColor")
     val activityTimes = dailyStats?.activityTimes ?: emptyMap()
+    val restMinutes = dailyStats?.restMinutes ?: 0
+    val restFallbackMs = TimeUnit.MINUTES.toMillis(restMinutes.toLong())
 
     Scaffold(
         topBar = {
