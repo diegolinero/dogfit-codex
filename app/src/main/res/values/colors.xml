@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Light Theme Colors (Warm Orange Palette) -->
+    <color name="md_theme_light_primary">#FF8C00</color>
+    <color name="md_theme_light_onPrimary">#FFFFFF</color>
+    <color name="md_theme_light_primary_container">#FFD8B1</color>
+    <color name="md_theme_light_onPrimary_container">#2B1700</color>
+    <color name="md_theme_light_secondary">#765A41</color>
+    <color name="md_theme_light_onSecondary">#FFFFFF</color>
+    <color name="md_theme_light_secondary_container">#FFDCC0</color>
+    <color name="md_theme_light_onSecondary_container">#2C1806</color>
+    <color name="md_theme_light_tertiary">#5B6237</color>
+    <color name="md_theme_light_onTertiary">#FFFFFF</color>
+    <color name="md_theme_light_tertiary_container">#E0E7B2</color>
+    <color name="md_theme_light_onTertiary_container">#191E00</color>
+    <color name="md_theme_light_error">#BA1A1A</color>
+    <color name="md_theme_light_onError">#FFFFFF</color>
+    <color name="md_theme_light_error_container">#FFDAD6</color>
+    <color name="md_theme_light_onError_container">#410002</color>
+    <color name="md_theme_light_background">#FFFBFF</color>
+    <color name="md_theme_light_onBackground">#201B17</color>
+    <color name="md_theme_light_surface">#FFFBFF</color>
+    <color name="md_theme_light_onSurface">#201B17</color>
+    <color name="md_theme_light_surfaceVariant">#F4E0D0</color>
+    <color name="md_theme_light_onSurfaceVariant">#524439</color>
+    <color name="md_theme_light_outline">#847467</color>
+
+    <!-- Dark Theme Colors (Opcional) -->
+    <color name="md_theme_dark_primary">#FFB77C</color>
+    <color name="md_theme_dark_onPrimary">#4D2700</color>
+    <color name="md_theme_dark_primary_container">#6D3900</color>
+    <color name="md_theme_dark_onPrimary_container">#FFDCC0</color>
+    <color name="md_theme_dark_secondary">#E6BE9E</color>
+    <color name="md_theme_dark_onSecondary">#432B17</color>
+    <color name="md_theme_dark_secondary_container">#5C422B</color>
+    <color name="md_theme_dark_onSecondary_container">#FFDCC0</color>
+
+    <!-- UI Compatibility Colors -->
+    <color name="primary">#FF8C00</color>
+    <color name="background">#FFFBFF</color>
+    <color name="text_primary">#201B17</color>
+    <color name="text_secondary">#524439</color>
+    <color name="text_hint">#847467</color>
+    <color name="divider">#D6D6D6</color>
+    <color name="info">#0077B6</color>
+
+    <!-- Activity Colors -->
+    <color name="activity_rest">#9E9E9E</color>
+    <color name="activity_walk">#4CAF50</color>
+    <color name="activity_run">#FF9800</color>
+    <color name="activity_play">#2196F3</color>
+    <color name="activity_unknown">#757575</color>
+</resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="activity_rest">Descanso</string>
+    <string name="activity_walk">Caminata</string>
+    <string name="activity_run">Carrera</string>
+    <string name="activity_play">Juego</string>
+    <string name="activity_unknown">Desconocido</string>
+</resources>
