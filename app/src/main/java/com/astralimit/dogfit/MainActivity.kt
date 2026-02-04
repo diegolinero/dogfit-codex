@@ -157,6 +157,8 @@ class MainActivity : ComponentActivity() {
 
     private fun registerBleReceivers() {
         if (isReceiverRegistered) return
+    override fun onResume() {
+        super.onResume()
         val filter = IntentFilter().apply {
             addAction(DogFitBleService.ACTION_NEW_DATA)
             addAction(DogFitBleService.ACTION_BLE_STATUS)
@@ -238,6 +240,8 @@ fun MainScreen(
         in 0..9 -> MaterialTheme.typography.displayMedium
         in 10..11 -> MaterialTheme.typography.headlineMedium
         else -> MaterialTheme.typography.titleMedium
+        in 10..12 -> MaterialTheme.typography.headlineMedium
+        else -> MaterialTheme.typography.titleLarge
     }
     val activitySubLabel = if (activityValue == null && isBleConnected) "Conectado" else "ESTADO"
     val activityLabelText = if (activityValue == null && isBleConnected) "Esperando" else activityLabel
