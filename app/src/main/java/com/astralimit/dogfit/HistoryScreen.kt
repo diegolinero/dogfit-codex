@@ -27,6 +27,7 @@ import java.util.*
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
+import java.util.concurrent.TimeUnit
 
 class HistoryScreen : ComponentActivity() {
 
@@ -56,6 +57,7 @@ fun HistoryContent(
     val history by viewModel.activityHistory.observeAsState()
     val dailyStats by viewModel.dailyStats.observeAsState()
     val weeklyStats by viewModel.weeklyStats.observeAsState()
+    val profile by viewModel.dogProfile.observeAsState()
     val activityTimes by viewModel.activityTimes.collectAsState()
 
     LaunchedEffect(Unit) {
@@ -180,26 +182,73 @@ fun HistoryContent(
             val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             val targetDate = String.format("%04d-%02d-%02d", selectedYear, selectedMonth + 1, selectedDay)
 
+            fun activityDate(activity: DogActivityData): String {
+                return dateFormat.format(Date(activity.timestamp))
+            }
+
             val filteredHistory = when (selectedPeriod) {
                 "Hoy" -> {
-                    history?.filter { it.date == targetDate } ?: emptyList()
+                    history?.filter { activityDate(it) == targetDate } ?: emptyList()
                 }
                 "Semana" -> {
                     calendar.add(Calendar.DAY_OF_YEAR, -7)
                     val weekAgoDate = dateFormat.format(calendar.time)
-                    history?.filter { it.date >= weekAgoDate } ?: emptyList()
+                    history?.filter { activityDate(it) >= weekAgoDate } ?: emptyList()
                 }
                 else -> {
                     calendar.time = Date()
                     calendar.add(Calendar.DAY_OF_YEAR, -30)
                     val monthAgoDate = dateFormat.format(calendar.time)
-                    history?.filter { it.date >= monthAgoDate } ?: emptyList()
+                    history?.filter { activityDate(it) >= monthAgoDate } ?: emptyList()
                 }
             }
 
             val groupedByDate = filteredHistory
-                .sortedByDescending { it.date }
-                .groupBy { it.date }
+                .sortedByDescending { activityDate(it) }
+                .groupBy { activityDate(it) }
+
+            fun buildDailySummary(date: String, activities: List<DogActivityData>): DailySummary {
+                val totalSteps = activities.sumOf { it.steps }
+                val activeMinutes = activities.count { it.activityType in 1..3 } * 5
+                val restMinutes = activities.count { it.activityType == 0 } * 5
+                val distance = activities.sumOf { it.estimatedDistance.toDouble() }.toFloat() / 1000
+                val calories = activities.sumOf { it.calories.toDouble() }.toFloat()
+                val activityTimes = (0..3).associateWith { activityType ->
+                    val minutes = activities.count { it.activityType == activityType } * 5
+                    minutes * 60L * 1000L
+                }
+                val activityDistribution = mutableMapOf<String, Int>()
+                activities.forEach { data ->
+                    val activityName = when (data.activityType) {
+                        0 -> "Reposo"
+                        1 -> "Caminata"
+                        2 -> "Carrera"
+                        3 -> "Juego"
+                        else -> "Desconocido"
+                    }
+                    activityDistribution[activityName] = (activityDistribution[activityName] ?: 0) + 5
+                }
+                val targetSteps = profile?.targetDailySteps ?: 5000
+                return DailySummary(
+                    date = date,
+                    totalSteps = totalSteps,
+                    totalActiveMinutes = activeMinutes,
+                    activeMinutes = activeMinutes,
+                    restMinutes = restMinutes,
+                    distanceKm = distance,
+                    caloriesBurned = calories,
+                    peakActivityHour = "--",
+                    longestWalk = 0,
+                    activityDistribution = activityDistribution,
+                    goalAchieved = totalSteps >= targetSteps,
+                    wellnessScore = 0,
+                    activityTimes = activityTimes
+                )
+            }
+
+            val summaries = groupedByDate
+                .map { (date, activities) -> date to buildDailySummary(date, activities) }
+                .sortedByDescending { it.first }
 
             if (groupedByDate.isEmpty()) {
                 item {
@@ -209,13 +258,13 @@ fun HistoryContent(
                 }
             }
 
-            groupedByDate.forEach { (date, activities) ->
+            summaries.forEach { (date, summary) ->
                 item {
                     DateHeader(date)
                 }
 
-                items(activities) { activity ->
-                    DailySummaryItem(activity)
+                item {
+                    DailySummaryItem(summary)
                 }
             }
         }
@@ -317,8 +366,8 @@ fun TodaySummaryCard(stats: DailySummary?, activityTimes: Map<Int, Long>) {
                             Text(label, style = MaterialTheme.typography.bodySmall)
                         }
                         val time = activityTimes[i] ?: 0L
-                        val minutes = time / 60
-                        val seconds = time % 60
+                        val minutes = TimeUnit.MILLISECONDS.toMinutes(time)
+                        val seconds = TimeUnit.MILLISECONDS.toSeconds(time) % 60
                         Text(
                             text = if (minutes > 0) "${minutes}m ${seconds}s" else "${seconds}s",
                             style = MaterialTheme.typography.bodySmall,
@@ -583,12 +632,12 @@ fun DailySummaryItem(summary: DailySummary) {
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(labels.getOrElse(act) { "Desconocido" }, style = MaterialTheme.typography.bodySmall)
                             }
-                            val minutes = time / 60
-                            val seconds = time % 60
-                            Text(
-                                text = if (minutes > 0) "${minutes}m ${seconds}s" else "${seconds}s",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold
+                    val minutes = TimeUnit.MILLISECONDS.toMinutes(time)
+                    val seconds = TimeUnit.MILLISECONDS.toSeconds(time) % 60
+                    Text(
+                        text = if (minutes > 0) "${minutes}m ${seconds}s" else "${seconds}s",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold
                             )
                         }
                     }

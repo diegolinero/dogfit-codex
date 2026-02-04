@@ -187,8 +187,8 @@ fun EmptyRoutesState() {
 }
 
 @Composable
-fun RouteMapPlaceholder(routes: List<RouteDay>) {
-    val allLocations = routes.flatMap { it.locations }
+fun RouteMapPlaceholder(routes: List<GpsLocation>) {
+    val allLocations = routes
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -226,8 +226,8 @@ fun RouteMapPlaceholder(routes: List<RouteDay>) {
 }
 
 @Composable
-fun RouteStatistics(routes: List<RouteDay>) {
-    val allLocations = routes.flatMap { it.locations }
+fun RouteStatistics(routes: List<GpsLocation>) {
+    val allLocations = routes
     var totalDistance = 0.0
     for (i in 1 until allLocations.size) {
         val prev = allLocations[i - 1]
@@ -238,7 +238,13 @@ fun RouteStatistics(routes: List<RouteDay>) {
         )
     }
 
-    val durationMinutes = routes.sumOf { it.durationMinutes }
+    val durationMinutes = if (allLocations.size >= 2) {
+        val sorted = allLocations.sortedBy { it.timestamp }
+        val durationMs = sorted.last().timestamp - sorted.first().timestamp
+        (durationMs / (1000 * 60)).toInt().coerceAtLeast(0)
+    } else {
+        0
+    }
 
     Row(
         modifier = Modifier
@@ -306,8 +312,8 @@ fun StatCard(
 }
 
 @Composable
-fun RoutePointsList(routes: List<RouteDay>) {
-    val allLocations = routes.flatMap { it.locations }
+fun RoutePointsList(routes: List<GpsLocation>) {
+    val allLocations = routes
     val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
     Card(
@@ -346,7 +352,7 @@ fun RoutePointsList(routes: List<RouteDay>) {
                         Text(
                             text = "${index + 1}",
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (index == 0 || index == routes.size - 1)
+                            color = if (index == 0 || index == allLocations.size - 1)
                                 Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -367,14 +373,14 @@ fun RoutePointsList(routes: List<RouteDay>) {
                     }
                 }
 
-                if (index < routes.size - 1 && index < 9) {
+                if (index < allLocations.size - 1 && index < 9) {
                     HorizontalDivider(modifier = Modifier.padding(start = 44.dp))
                 }
             }
 
-            if (routes.size > 10) {
+            if (allLocations.size > 10) {
                 Text(
-                    text = "+ ${routes.size - 10} puntos más",
+                    text = "+ ${allLocations.size - 10} puntos más",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 8.dp)
