@@ -702,7 +702,7 @@ fun WeightHistoryTab(profile: DogProfile?, viewModel: DogFitViewModel) {
                 Button(
                     onClick = {
                         weightInput.toFloatOrNull()?.let {
-                            viewModel.addWeightRecord(it)
+                            viewModel.addWeightRecord(WeightRecord(System.currentTimeMillis(), it))
                         }
                         showAddWeightDialog = false
                     }
