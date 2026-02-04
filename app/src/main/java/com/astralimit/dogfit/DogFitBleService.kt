@@ -18,9 +18,12 @@ class DogFitBleService : Service() {
     private var isConnecting = false
     private var fallbackScanEnabled = false
     private val scanHandler = Handler(Looper.getMainLooper())
+    private var notificationQueue: ArrayDeque<UUID> = ArrayDeque()
+    private var notificationService: BluetoothGattService? = null
 
     private val SERVICE_UUID = UUID.fromString("4fafc201-1fb5-459e-8fcc-c5c9c331914b")
     private val ACTIVITY_CHAR_UUID = UUID.fromString("beb5483e-36e1-4688-b7f5-ea07361b26a8")
+    private val GPS_CHAR_UUID = UUID.fromString("beb5483e-36e1-4688-b7f5-ea07361b26a9")
     private val BATTERY_CHAR_UUID = UUID.fromString("beb5483e-36e1-4688-b7f5-ea07361b26aa")
     private val DEVICE_NAME_PREFIX = "DogFit"
     private val SCAN_FALLBACK_DELAY_MS = 10000L
@@ -71,6 +74,8 @@ class DogFitBleService : Service() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             if (isConnecting) return
             val deviceName = result.device.name ?: result.scanRecord?.deviceName
+            val hasService = result.scanRecord?.serviceUuids?.contains(ParcelUuid(SERVICE_UUID)) == true
+            if (fallbackScanEnabled && !hasService && deviceName?.contains(DEVICE_NAME_PREFIX, ignoreCase = true) != true) {
             if (fallbackScanEnabled && deviceName?.contains(DEVICE_NAME_PREFIX, ignoreCase = true) != true) {
                 return
             }
@@ -79,12 +84,31 @@ class DogFitBleService : Service() {
             isScanning = false
             scanHandler.removeCallbacksAndMessages(null)
             bluetoothAdapter?.bluetoothLeScanner?.stopScan(this)
-            bluetoothGatt = result.device.connectGatt(this@DogFitBleService, false, gattCallback)
+            bluetoothGatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                result.device.connectGatt(this@DogFitBleService, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+            } else {
+                result.device.connectGatt(this@DogFitBleService, false, gattCallback)
+            }
+        }
+
+        override fun onScanFailed(errorCode: Int) {
+            Log.e(TAG, "Escaneo BLE falló con código $errorCode. Reintentando...")
+            isScanning = false
+            isConnecting = false
+            scanHandler.removeCallbacksAndMessages(null)
+            Handler(Looper.getMainLooper()).postDelayed({ startScanning() }, 3000)
         }
     }
 
     private val gattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                Log.e(TAG, "Error GATT ($status). Reintentando conexión...")
+                isConnecting = false
+                gatt.close()
+                Handler(Looper.getMainLooper()).postDelayed({ startScanning() }, 5000)
+                return
+            }
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 Log.i(TAG, "GATT Conectado. Descubriendo servicios...")
                 isConnecting = false
@@ -109,8 +133,22 @@ class DogFitBleService : Service() {
                 Log.e(TAG, "Servicio BLE no encontrado")
                 return
             }
-            enableNotifications(gatt, service.getCharacteristic(ACTIVITY_CHAR_UUID))
-            enableNotifications(gatt, service.getCharacteristic(BATTERY_CHAR_UUID))
+            notificationService = service
+            notificationQueue = ArrayDeque(
+                listOf(ACTIVITY_CHAR_UUID, GPS_CHAR_UUID, BATTERY_CHAR_UUID)
+            )
+            enableNextNotification(gatt)
+        }
+
+        override fun onDescriptorWrite(
+            gatt: BluetoothGatt,
+            descriptor: BluetoothGattDescriptor,
+            status: Int
+        ) {
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                Log.e(TAG, "Error escribiendo descriptor BLE ($status)")
+            }
+            enableNextNotification(gatt)
         }
 
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
@@ -133,6 +171,26 @@ class DogFitBleService : Service() {
             gatt.writeDescriptor(descriptor)
         } else {
             Log.e(TAG, "Descriptor BLE no encontrado")
+        }
+    }
+
+    private fun enableNextNotification(gatt: BluetoothGatt) {
+        val service = notificationService ?: return
+        val nextUuid = notificationQueue.removeFirstOrNull() ?: return
+        val characteristic = service.getCharacteristic(nextUuid)
+        if (characteristic == null) {
+            Log.e(TAG, "Característica BLE $nextUuid no encontrada")
+            enableNextNotification(gatt)
+            return
+        }
+        val descriptor = characteristic.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"))
+        gatt.setCharacteristicNotification(characteristic, true)
+        if (descriptor != null) {
+            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            gatt.writeDescriptor(descriptor)
+        } else {
+            Log.e(TAG, "Descriptor BLE no encontrado para $nextUuid")
+            enableNextNotification(gatt)
         }
     }
 
