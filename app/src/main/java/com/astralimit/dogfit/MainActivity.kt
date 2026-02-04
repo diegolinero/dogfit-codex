@@ -35,6 +35,7 @@ import androidx.core.content.ContextCompat
 import com.astralimit.dogfit.ui.theme.DogFitTheme
 import org.json.JSONObject
 import androidx.compose.runtime.livedata.observeAsState
+import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
 
@@ -176,10 +177,29 @@ fun MainScreen(
     val activityValue by viewModel.activityValue.collectAsState()
     val alerts by viewModel.alerts.observeAsState()
 
-    val wellnessScore = dailyStats?.wellnessScore ?: 0
-    val activityMinutes = dailyStats?.totalActiveMinutes ?: 0
-    val restMinutes = dailyStats?.restMinutes ?: 0
-    val progress = (wellnessScore / 100f).coerceIn(0f, 1f)
+    val activityLabel = when (activityValue) {
+        0 -> "Reposo"
+        1 -> "Caminando"
+        2 -> "Corriendo"
+        3 -> "Jugando"
+        else -> "Desconectado"
+    }
+    val activityColor = when (activityValue) {
+        0 -> MaterialTheme.colorScheme.tertiary
+        1 -> MaterialTheme.colorScheme.primary
+        2 -> MaterialTheme.colorScheme.secondary
+        3 -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.outline
+    }
+    val progress = when (activityValue) {
+        0 -> 0.25f
+        1 -> 0.5f
+        2 -> 0.75f
+        3 -> 1f
+        else -> 0f
+    }
+    val animatedColor by animateColorAsState(activityColor, label = "activityColor")
+    val activityTimes = dailyStats?.activityTimes ?: emptyMap()
 
     Scaffold(
         topBar = {
@@ -250,19 +270,19 @@ fun MainScreen(
                             progress = { progress },
                             modifier = Modifier.fillMaxSize(),
                             strokeWidth = 12.dp,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = animatedColor,
                             trackColor = MaterialTheme.colorScheme.surfaceVariant
                         )
 
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "$wellnessScore",
+                                text = activityLabel,
                                 style = MaterialTheme.typography.displayMedium,
                                 fontWeight = FontWeight.Black,
-                                color = MaterialTheme.colorScheme.primary
+                                color = animatedColor
                             )
                             Text(
-                                text = "BIENESTAR",
+                                text = "ESTADO",
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -272,13 +292,13 @@ fun MainScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = "${(progress * 100).toInt()}% del bienestar diario",
+                        text = "Estado actual del collar",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
 
                     Text(
-                        text = "Actividad hoy: $activityMinutes min activos",
+                        text = "Resumen de actividad del día",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -287,6 +307,53 @@ fun MainScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Resumen 24h por actividad",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    listOf(
+                        0 to "Reposo",
+                        1 to "Caminando",
+                        2 to "Corriendo",
+                        3 to "Jugando"
+                    ).forEach { (type, label) ->
+                        val time = activityTimes[type] ?: 0L
+                        val minutes = TimeUnit.MILLISECONDS.toMinutes(time)
+                        val hours = minutes / 60
+                        val remainingMinutes = minutes % 60
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = "${hours}h ${remainingMinutes}m",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
 
