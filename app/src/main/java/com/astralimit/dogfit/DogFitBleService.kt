@@ -85,6 +85,7 @@ class DogFitBleService : Service() {
             val deviceName = result.device.name ?: result.scanRecord?.deviceName
             val hasService = result.scanRecord?.serviceUuids?.contains(ParcelUuid(SERVICE_UUID)) == true
             if (fallbackScanEnabled && !hasService && deviceName?.contains(DEVICE_NAME_PREFIX, ignoreCase = true) != true) {
+            if (fallbackScanEnabled && deviceName?.contains(DEVICE_NAME_PREFIX, ignoreCase = true) != true) {
                 return
             }
             Log.d(TAG, "Dispositivo encontrado: ${deviceName ?: "Desconocido"}")
